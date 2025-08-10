@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>1440TIME™ – Living Vault Demo</title>
+<style>
+  :root{
+    --bg:#0c0e13;--panel:#121622;--ink:#e9fef8;--muted:#90bdb2;
+    --brand:#00e7c1;--accent:#29ffd7;--sleep:#7aa2ff;--work:#ff9b6a;--ontime:#25f7b5;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.45 system-ui,-apple-system,Segoe UI,Inter,Roboto,Arial}
+  header{padding:18px 16px;border-bottom:1px solid #1a2031;background:#0f1320;position:sticky;top:0;z-index:2}
+  h1{margin:0;font-size:18px;letter-spacing:.3px}
+  .sub{color:var(--muted);font-size:12px;margin-top:4px}
+  main{max-width:980px;margin:0 auto;padding:18px 16px;display:grid;gap:16px}
+  .card{background:var(--panel);border:1px solid #1a2031;border-radius:16px;padding:14px}
+  .row{display:grid;grid-template-columns:1fr;gap:12px}
+  @media(min-width:720px){.row{grid-template-columns:repeat(3,1fr)}}
+  label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+  input[type=range]{width:100%}
+  .bigline{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+  .pill{border:1px solid #28314a;border-radius:999px;padding:6px 10px;font-size:12px;white-space:nowrap}
+  .p-sleep{border-color:var(--sleep);color:var(--sleep)}
+  .p-work{border-color:var(--work);color:var(--work)}
+  .p-ont{border-color:var(--ontime);color:var(--ontime)}
+  .btn{appearance:none;border:0;border-radius:12px;padding:10px 14px;background:var(--brand);color:#001813;font-weight:800;cursor:pointer}
+  .btn.ghost{background:#151a2a;color:var(--ink);border:1px solid #243050}
+  .center{display:grid;place-items:center}
+  .vault-wrap{position:relative;aspect-ratio:1/1;width:100%;max-width:520px;margin:0 auto}
+  canvas{display:block;width:100%;height:100%;background:radial-gradient(120% 120% at 50% 40%, #151a28 0%, #0b0e17 70%)}
+  /* Vault door */
+  .door{
+    position:absolute;inset:0;margin:auto;width:86%;height:86%;
+    border-radius:50%; border:10px solid #222a44;
+    box-shadow:inset 0 0 40px rgba(0,0,0,.6), 0 10px 30px rgba(0,0,0,.4);
+    background:conic-gradient(from 0deg, #1b223c, #20294a 40%, #1b223c 100%);
+    display:grid;place-items:center;overflow:hidden;
+  }
+  .dial{
+    width:44%;height:44%;border-radius:50%;border:6px solid #0e1222;
+    box-shadow:inset 0 0 18px rgba(0,0,0,.6);
+    background:radial-gradient(60% 60% at 50% 50%, #1a2140 0%, #0e1222 100%);
+    position:relative;
+  }
+  .dial::after{
+    content:"";position:absolute;left:50%;top:50%;width:4px;height:38%;
+    background:linear-gradient(#39ffe0,#00e7c1);transform-origin:50% 90%;transform:translate(-50%,-85%) rotate(0deg);
+    border-radius:4px;animation:tick 1.8s linear infinite;
+  }
+  @keyframes tick { to{ transform:translate(-50%,-85%) rotate(360deg);} }
+  .door.open{animation:openDoor 1.25s ease forwards}
+  @keyframes openDoor {
+    0% {transform:scale(1) rotate(0deg)}
+    40%{transform:scale(0.98) rotate(-6deg)}
+    100%{transform:translateY(-120%) rotate(-18deg); opacity:0}
+  }
+  .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .kp{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+  .kp big{font-weight:900;font-size:28px}
+  .tiny{font-size:11px;color:#9fb7b3}
+</style>
+</head>
+<body>
+<header>
+  <h1>1440TIME™ • Living Vault (Token Reality Demo)</h1>
+  <div class="sub">Open the vault, then dial in Sleep & Work. Watch tokens dissolve. What remains is your On-Time.</div>
+</header>
+
+<main>
+  <section class="card">
+    <div class="row">
+      <div>
+        <label>Sleep (hours)</label>
+        <input id="sleepH" type="range" min="0" max="12" step="0.25" value="7" />
+        <div class="kp"><span class="pill p-sleep">Sleep</span><big id="sleepMin">420</big><span class="tiny">min</span></div>
+      </div>
+      <div>
+        <label>Work (hours, door-to-door)</label>
+        <input id="workH" type="range" min="0" max="14" step="0.25" value="9" />
+        <div class="kp"><span class="pill p-work">Work</span><big id="workMin">540</big><span class="tiny">min</span></div>
+      </div>
+      <div>
+        <label>Annual Salary (optional, $)</label>
+        <input id="salary" type="range" min="0" max="500000" step="5000" value="200000" />
+        <div class="kp"><span class="pill">$/work-min</span><big id="dpm">$1.48</big></div>
+      </div>
+    </div>
+    <div class="bigline" style="margin-top:10px">
+      <span class="pill p-ont">On-Time</span>
+      <big id="ontTokens">480</big><span class="tiny">tokens (minutes) left today</span>
+      <button class="btn ghost" id="openBtn">Open Vault</button>
+    </div>
+    <div class="legend">
+      <span class="tiny">Tip: Slide Sleep/Work to feel how quickly tokens vanish. This is why minutes are your true currency.</span>
+    </div>
+  </section>
+
+  <section class="card center">
+    <div class="vault-wrap">
+      <canvas id="vault" width="1000" height="1000"></canvas>
+      <div class="door" id="door">
+        <div class="dial"></div>
+      </div>
+    </div>
+    <div class="legend">
+      <span class="pill p-sleep">Sleep tokens</span>
+      <span class="pill p-work">Work tokens</span>
+      <span class="pill p-ont">On-Time tokens</span>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ========= Config ========= */
+const TOTAL = 1440; // daily minutes
+const GRID_COLS = 48; // token grid width (48 x 30 = 1440)
+const COLORS = {
+  bg: "#0c0e13",
+  sleep: getCSS("--sleep"),
+  work: getCSS("--work"),
+  ontime: getCSS("--ontime"),
+  muted: "#1b2237"
+};
+
+/* ========= Helpers ========= */
+function $(id){ return document.getElementById(id) }
+function getCSS(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim() }
+function lerp(a,b,t){ return a + (b - a) * t }
+function clamp(n,min,max){ return Math.max(min, Math.min(max, n)) }
+
+/* ========= Elements ========= */
+const sleepH = $("sleepH");
+const workH  = $("workH");
+const salary = $("salary");
+const sleepMinEl = $("sleepMin");
+const workMinEl = $("workMin");
+const dpmEl = $("dpm");
+const ontTokensEl = $("ontTokens");
+const openBtn = $("openBtn");
+const door = $("door");
+
+const canvas = $("vault");
+const ctx = canvas.getContext("2d");
+
+/* ========= Token Grid ========= */
+const COLS = GRID_COLS;
+const ROWS = Math.ceil(TOTAL / COLS);
+const pad = 18;
+const w = canvas.width, h = canvas.height;
+const gw = w - pad*2, gh = h - pad*2;
+const cell = Math.min(gw/COLS, gh/ROWS);
+const ox = (w - cell*COLS)/2, oy = (h - cell*ROWS)/2;
+
+let tokens = []; // {x,y,state,color,alpha}
+
+function buildTokens(){
+  tokens.length = 0;
+  let count = 0;
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      if(count++ >= TOTAL) break;
+      const x = ox + c*cell + cell/2;
+      const y = oy + (ROWS-1-r)*cell + cell/2; // stack from bottom
+      tokens.push({x,y,alpha:1,color:COLORS.ontime, state:"ont"});
+    }
+  }
+}
+buildTokens();
+
+/* ========= State ========= */
+let sleepMin = Math.round(parseFloat(sleepH.value)*60);
+let workMin  = Math.round(parseFloat(workH.value)*60);
+let onTime   = Math.max(0, TOTAL - sleepMin - workMin);
+let animTarget = { sleep: sleepMin, work: workMin, ontime: onTime }; // for smooth number updates
+let current = { sleep: sleepMin, work: workMin, ontime: onTime };
+
+/* ========= Drawing ========= */
+function draw(){
+  ctx.clearRect(0,0,w,h);
+
+  // soft floor glow
+  const grad = ctx.createRadialGradient(w/2,h*0.6,50,w/2,h*0.6,h*0.7);
+  grad.addColorStop(0, "rgba(37,247,181,0.08)");
+  grad.addColorStop(1, "rgba(37,247,181,0)");
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.arc(w/2,h*0.65,h*0.6,0,Math.PI*2); ctx.fill();
+
+  // draw tokens
+  const r = Math.max(2, Math.min(cell*0.36, 8)); // token radius responsive to grid
+  tokens.forEach(t=>{
+    if(t.alpha <= 0.02) return;
+    ctx.globalAlpha = t.alpha;
+    ctx.fillStyle = t.color;
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, r, 0, Math.PI*2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+/* ========= Allocation & Animation ========= */
+function applyAllocation(){
+  // classify tokens: first sleep, then work, remainder on-time
+  let sNeeded = sleepMin, wNeeded = workMin;
+  tokens.forEach((t, i)=>{
+    let desiredState, desiredColor, desiredAlpha=1;
+    if(i < sNeeded) { desiredState="sleep"; desiredColor=COLORS.sleep; }
+    else if(i < sNeeded + wNeeded) { desiredState="work"; desiredColor=COLORS.work; }
+    else { desiredState="ont"; desiredColor=COLORS.ontime; }
+
+    // If state changes, animate color/alpha a bit
+    if(t.state !== desiredState){
+      t.state = desiredState;
+      t.color = desiredColor;
+      // quick dissolve/reappear pulse
+      t.alpha = 0.15;
+    }
+    // ease alpha back to 1
+    t.alpha = lerp(t.alpha, 1, 0.1);
+  });
+  onTime = Math.max(0, TOTAL - sleepMin - workMin);
+  animTarget.sleep = sleepMin;
+  animTarget.work  = workMin;
+  animTarget.ontime= onTime;
+}
+
+function animateNumbers(){
+  // ease numbers to target for a pleasing roll effect
+  current.sleep = lerp(current.sleep, animTarget.sleep, 0.25);
+  current.work  = lerp(current.work , animTarget.work , 0.25);
+  current.ontime= lerp(current.ontime,animTarget.ontime,0.25);
+  sleepMinEl.textContent = Math.round(current.sleep);
+  workMinEl.textContent  = Math.round(current.work);
+  ontTokensEl.textContent= Math.round(current.ontime);
+}
+
+function loop(){
+  animateNumbers();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+
+/* ========= Events ========= */
+function recalc(){
+  sleepMin = Math.round(parseFloat(sleepH.value)*60);
+  workMin  = Math.round(parseFloat(workH.value)*60);
+
+  // $/work-minute
+  const sal = clamp(parseFloat(salary.value)||0,0,5e6);
+  const workMinYear = (parseFloat(workH.value)||0)*60*5*52;
+  const dpm = workMinYear ? sal / workMinYear : 0;
+  dpmEl.textContent = "$" + dpm.toFixed(2);
+
+  applyAllocation();
+}
+[sleepH,workH,salary].forEach(el=> el.addEventListener("input", recalc));
+
+openBtn.addEventListener("click", ()=>{
+  door.classList.add("open");
+  openBtn.disabled = true;
+  openBtn.textContent = "Vault Opened";
+});
+
+recalc(); // initial
+
+/* ========= Optional sparkles on change ========= */
+let sparkleTimer=0;
+function sparkles(x,y,color){
+  // simple burst particles (decorative)
+  const N=10;
+  const ps=[];
+  for(let i=0;i<N;i++){
+    const a=Math.random()*Math.PI*2, sp=2+Math.random()*3;
+    ps.push({x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:1});
+  }
+  const id = ++sparkleTimer;
+  const step=()=>{
+    if(id!==sparkleTimer) return;
+    ctx.save();
+    ps.forEach(p=>{
+      p.x+=p.vx; p.y+=p.vy; p.vy+=0.03; p.life*=0.92;
+      ctx.globalAlpha=p.life;
+      ctx.fillStyle=color;
+      ctx.beginPath(); ctx.arc(p.x,p.y,2.2,0,Math.PI*2); ctx.fill();
+    });
+    ctx.restore();
+    if(ps[0].life>0.05) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+// Hook sparkles to slider releases
+[sleepH,workH].forEach(el=>{
+  el.addEventListener("change", ()=>{
+    // burst near top of pile
+    sparkles(w/2, oy + cell*ROWS*0.2, COLORS.ontime);
+  });
+});
+</script>
+</body>
+</html>
