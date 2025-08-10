@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>1440TIME™ – Living Vault Demo</title>
+<title>1440TIME™ – Living Vault Demo (Lockable Work + Salary Input)</title>
 <style>
   :root{
     --bg:#0c0e13;--panel:#121622;--ink:#e9fef8;--muted:#90bdb2;
@@ -20,7 +20,7 @@
   .row{display:grid;grid-template-columns:1fr;gap:12px}
   @media(min-width:720px){.row{grid-template-columns:repeat(3,1fr)}}
   label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
-  input[type=range]{width:100%}
+  input[type=range], input[type=number]{width:100%}
   .bigline{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
   .pill{border:1px solid #28314a;border-radius:999px;padding:6px 10px;font-size:12px;white-space:nowrap}
   .p-sleep{border-color:var(--sleep);color:var(--sleep)}
@@ -61,12 +61,13 @@
   .kp{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
   .kp big{font-weight:900;font-size:28px}
   .tiny{font-size:11px;color:#9fb7b3}
+  .lock{display:flex;gap:8px;align-items:center;margin-top:6px;color:#b9c6ff;font-size:12px}
 </style>
 </head>
 <body>
 <header>
   <h1>1440TIME™ • Living Vault (Token Reality Demo)</h1>
-  <div class="sub">Open the vault, then dial in Sleep & Work. Watch tokens dissolve. What remains is your On-Time.</div>
+  <div class="sub">Open the vault, then dial in Sleep & Work. What remains is your On-Time. Salary sets <b>Livelihood $/min</b>.</div>
 </header>
 
 <main>
@@ -81,11 +82,12 @@
         <label>Work (hours, door-to-door)</label>
         <input id="workH" type="range" min="0" max="14" step="0.25" value="9" />
         <div class="kp"><span class="pill p-work">Work</span><big id="workMin">540</big><span class="tiny">min</span></div>
+        <label class="lock"><input id="lockWork" type="checkbox" /> Lock Work (keep work tokens fixed)</label>
       </div>
       <div>
-        <label>Annual Salary (optional, $)</label>
-        <input id="salary" type="range" min="0" max="500000" step="5000" value="200000" />
-        <div class="kp"><span class="pill">$/work-min</span><big id="dpm">$1.48</big></div>
+        <label>Annual Salary (USD)</label>
+        <input id="salary" type="number" placeholder="e.g. 200000" value="200000" />
+        <div class="kp"><span class="pill">Livelihood $/min</span><big id="dpm">$1.48</big></div>
       </div>
     </div>
     <div class="bigline" style="margin-top:10px">
@@ -94,7 +96,7 @@
       <button class="btn ghost" id="openBtn">Open Vault</button>
     </div>
     <div class="legend">
-      <span class="tiny">Tip: Slide Sleep/Work to feel how quickly tokens vanish. This is why minutes are your true currency.</span>
+      <span class="tiny">Tip: Slide Sleep/Work to feel how quickly tokens vanish. Salary instantly updates your <b>Livelihood $/min</b>.</span>
     </div>
   </section>
 
@@ -115,14 +117,12 @@
 
 <script>
 /* ========= Config ========= */
-const TOTAL = 1440; // daily minutes
-const GRID_COLS = 48; // token grid width (48 x 30 = 1440)
+const TOTAL = 1440;
+const GRID_COLS = 48;
 const COLORS = {
-  bg: "#0c0e13",
   sleep: getCSS("--sleep"),
   work: getCSS("--work"),
-  ontime: getCSS("--ontime"),
-  muted: "#1b2237"
+  ontime: getCSS("--ontime")
 };
 
 /* ========= Helpers ========= */
@@ -135,6 +135,8 @@ function clamp(n,min,max){ return Math.max(min, Math.min(max, n)) }
 const sleepH = $("sleepH");
 const workH  = $("workH");
 const salary = $("salary");
+const lockWork = $("lockWork");
+
 const sleepMinEl = $("sleepMin");
 const workMinEl = $("workMin");
 const dpmEl = $("dpm");
@@ -154,8 +156,7 @@ const gw = w - pad*2, gh = h - pad*2;
 const cell = Math.min(gw/COLS, gh/ROWS);
 const ox = (w - cell*COLS)/2, oy = (h - cell*ROWS)/2;
 
-let tokens = []; // {x,y,state,color,alpha}
-
+let tokens = [];
 function buildTokens(){
   tokens.length = 0;
   let count = 0;
@@ -163,7 +164,7 @@ function buildTokens(){
     for(let c=0;c<COLS;c++){
       if(count++ >= TOTAL) break;
       const x = ox + c*cell + cell/2;
-      const y = oy + (ROWS-1-r)*cell + cell/2; // stack from bottom
+      const y = oy + (ROWS-1-r)*cell + cell/2;
       tokens.push({x,y,alpha:1,color:COLORS.ontime, state:"ont"});
     }
   }
@@ -174,22 +175,13 @@ buildTokens();
 let sleepMin = Math.round(parseFloat(sleepH.value)*60);
 let workMin  = Math.round(parseFloat(workH.value)*60);
 let onTime   = Math.max(0, TOTAL - sleepMin - workMin);
-let animTarget = { sleep: sleepMin, work: workMin, ontime: onTime }; // for smooth number updates
+let animTarget = { sleep: sleepMin, work: workMin, ontime: onTime };
 let current = { sleep: sleepMin, work: workMin, ontime: onTime };
 
 /* ========= Drawing ========= */
 function draw(){
   ctx.clearRect(0,0,w,h);
-
-  // soft floor glow
-  const grad = ctx.createRadialGradient(w/2,h*0.6,50,w/2,h*0.6,h*0.7);
-  grad.addColorStop(0, "rgba(37,247,181,0.08)");
-  grad.addColorStop(1, "rgba(37,247,181,0)");
-  ctx.fillStyle = grad;
-  ctx.beginPath(); ctx.arc(w/2,h*0.65,h*0.6,0,Math.PI*2); ctx.fill();
-
-  // draw tokens
-  const r = Math.max(2, Math.min(cell*0.36, 8)); // token radius responsive to grid
+  const r = Math.max(2, Math.min(cell*0.36, 8));
   tokens.forEach(t=>{
     if(t.alpha <= 0.02) return;
     ctx.globalAlpha = t.alpha;
@@ -201,24 +193,20 @@ function draw(){
   ctx.globalAlpha = 1;
 }
 
-/* ========= Allocation & Animation ========= */
+/* ========= Allocation ========= */
 function applyAllocation(){
-  // classify tokens: first sleep, then work, remainder on-time
   let sNeeded = sleepMin, wNeeded = workMin;
   tokens.forEach((t, i)=>{
-    let desiredState, desiredColor, desiredAlpha=1;
+    let desiredState, desiredColor;
     if(i < sNeeded) { desiredState="sleep"; desiredColor=COLORS.sleep; }
     else if(i < sNeeded + wNeeded) { desiredState="work"; desiredColor=COLORS.work; }
     else { desiredState="ont"; desiredColor=COLORS.ontime; }
 
-    // If state changes, animate color/alpha a bit
     if(t.state !== desiredState){
       t.state = desiredState;
       t.color = desiredColor;
-      // quick dissolve/reappear pulse
-      t.alpha = 0.15;
+      t.alpha = 0.15; // pulse
     }
-    // ease alpha back to 1
     t.alpha = lerp(t.alpha, 1, 0.1);
   });
   onTime = Math.max(0, TOTAL - sleepMin - workMin);
@@ -227,8 +215,8 @@ function applyAllocation(){
   animTarget.ontime= onTime;
 }
 
+/* ========= Numbers Animation ========= */
 function animateNumbers(){
-  // ease numbers to target for a pleasing roll effect
   current.sleep = lerp(current.sleep, animTarget.sleep, 0.25);
   current.work  = lerp(current.work , animTarget.work , 0.25);
   current.ontime= lerp(current.ontime,animTarget.ontime,0.25);
@@ -237,6 +225,7 @@ function animateNumbers(){
   ontTokensEl.textContent= Math.round(current.ontime);
 }
 
+/* ========= Loop ========= */
 function loop(){
   animateNumbers();
   draw();
@@ -246,18 +235,25 @@ loop();
 
 /* ========= Events ========= */
 function recalc(){
+  // if work is locked, restore previous minutes and keep the slider visually in sync
+  if(lockWork.checked){
+    workH.value = (workMin/60).toFixed(2);
+  } else {
+    workMin  = Math.round(parseFloat(workH.value)*60);
+  }
   sleepMin = Math.round(parseFloat(sleepH.value)*60);
-  workMin  = Math.round(parseFloat(workH.value)*60);
 
-  // $/work-minute
+  // Livelihood $/min = salary / (workH * 60 * 5 * 52)
   const sal = clamp(parseFloat(salary.value)||0,0,5e6);
-  const workMinYear = (parseFloat(workH.value)||0)*60*5*52;
+  const workHours = lockWork.checked ? (workMin/60) : (parseFloat(workH.value)||0);
+  const workMinYear = (workHours||0)*60*5*52;
   const dpm = workMinYear ? sal / workMinYear : 0;
   dpmEl.textContent = "$" + dpm.toFixed(2);
 
   applyAllocation();
 }
-[sleepH,workH,salary].forEach(el=> el.addEventListener("input", recalc));
+
+[sleepH,workH,salary,lockWork].forEach(el=> el.addEventListener("input", recalc));
 
 openBtn.addEventListener("click", ()=>{
   door.classList.add("open");
@@ -265,40 +261,7 @@ openBtn.addEventListener("click", ()=>{
   openBtn.textContent = "Vault Opened";
 });
 
-recalc(); // initial
-
-/* ========= Optional sparkles on change ========= */
-let sparkleTimer=0;
-function sparkles(x,y,color){
-  // simple burst particles (decorative)
-  const N=10;
-  const ps=[];
-  for(let i=0;i<N;i++){
-    const a=Math.random()*Math.PI*2, sp=2+Math.random()*3;
-    ps.push({x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:1});
-  }
-  const id = ++sparkleTimer;
-  const step=()=>{
-    if(id!==sparkleTimer) return;
-    ctx.save();
-    ps.forEach(p=>{
-      p.x+=p.vx; p.y+=p.vy; p.vy+=0.03; p.life*=0.92;
-      ctx.globalAlpha=p.life;
-      ctx.fillStyle=color;
-      ctx.beginPath(); ctx.arc(p.x,p.y,2.2,0,Math.PI*2); ctx.fill();
-    });
-    ctx.restore();
-    if(ps[0].life>0.05) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
-}
-// Hook sparkles to slider releases
-[sleepH,workH].forEach(el=>{
-  el.addEventListener("change", ()=>{
-    // burst near top of pile
-    sparkles(w/2, oy + cell*ROWS*0.2, COLORS.ontime);
-  });
-});
+recalc();
 </script>
 </body>
 </html>
