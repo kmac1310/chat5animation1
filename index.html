@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>1440TIME™ – Living Vault Demo (Lockable Work + Salary Input)</title>
+<title>1440TIME™ – Living Vault (Lockable Work + Salary Input)</title>
 <style>
   :root{
     --bg:#0c0e13;--panel:#121622;--ink:#e9fef8;--muted:#90bdb2;
@@ -21,6 +21,7 @@
   @media(min-width:720px){.row{grid-template-columns:repeat(3,1fr)}}
   label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
   input[type=range], input[type=number]{width:100%}
+  input[disabled]{opacity:.5;cursor:not-allowed}
   .bigline{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
   .pill{border:1px solid #28314a;border-radius:999px;padding:6px 10px;font-size:12px;white-space:nowrap}
   .p-sleep{border-color:var(--sleep);color:var(--sleep)}
@@ -31,6 +32,11 @@
   .center{display:grid;place-items:center}
   .vault-wrap{position:relative;aspect-ratio:1/1;width:100%;max-width:520px;margin:0 auto}
   canvas{display:block;width:100%;height:100%;background:radial-gradient(120% 120% at 50% 40%, #151a28 0%, #0b0e17 70%)}
+  .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .kp{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+  .kp big{font-weight:900;font-size:28px}
+  .tiny{font-size:11px;color:#9fb7b3}
+  .lock{display:flex;gap:8px;align-items:center;margin-top:6px;color:#b9c6ff;font-size:12px}
   /* Vault door */
   .door{
     position:absolute;inset:0;margin:auto;width:86%;height:86%;
@@ -57,11 +63,6 @@
     40%{transform:scale(0.98) rotate(-6deg)}
     100%{transform:translateY(-120%) rotate(-18deg); opacity:0}
   }
-  .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-  .kp{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
-  .kp big{font-weight:900;font-size:28px}
-  .tiny{font-size:11px;color:#9fb7b3}
-  .lock{display:flex;gap:8px;align-items:center;margin-top:6px;color:#b9c6ff;font-size:12px}
 </style>
 </head>
 <body>
@@ -75,24 +76,24 @@
     <div class="row">
       <div>
         <label>Sleep (hours)</label>
-        <input id="sleepH" type="range" min="0" max="12" step="0.25" value="7" />
-        <div class="kp"><span class="pill p-sleep">Sleep</span><big id="sleepMin">420</big><span class="tiny">min</span></div>
+        <input id="sleepH" type="range" min="0" max="12" step="0.25" value="6.5" />
+        <div class="kp"><span class="pill p-sleep">Sleep</span><big id="sleepMin">390</big><span class="tiny">min</span></div>
       </div>
       <div>
         <label>Work (hours, door-to-door)</label>
-        <input id="workH" type="range" min="0" max="14" step="0.25" value="9" />
-        <div class="kp"><span class="pill p-work">Work</span><big id="workMin">540</big><span class="tiny">min</span></div>
+        <input id="workH" type="range" min="0" max="14" step="0.25" value="10" />
+        <div class="kp"><span class="pill p-work">Work</span><big id="workMin">600</big><span class="tiny">min</span></div>
         <label class="lock"><input id="lockWork" type="checkbox" /> Lock Work (keep work tokens fixed)</label>
       </div>
       <div>
         <label>Annual Salary (USD)</label>
-        <input id="salary" type="number" placeholder="e.g. 200000" value="200000" />
-        <div class="kp"><span class="pill">Livelihood $/min</span><big id="dpm">$1.48</big></div>
+        <input id="salary" type="number" placeholder="e.g. 200000" value="500000" />
+        <div class="kp"><span class="pill">Livelihood $/min</span><big id="dpm">$0.00</big></div>
       </div>
     </div>
     <div class="bigline" style="margin-top:10px">
       <span class="pill p-ont">On-Time</span>
-      <big id="ontTokens">480</big><span class="tiny">tokens (minutes) left today</span>
+      <big id="ontTokens">450</big><span class="tiny">tokens (minutes) left today</span>
       <button class="btn ghost" id="openBtn">Open Vault</button>
     </div>
     <div class="legend">
@@ -120,14 +121,14 @@
 const TOTAL = 1440;
 const GRID_COLS = 48;
 const COLORS = {
-  sleep: getCSS("--sleep"),
-  work: getCSS("--work"),
-  ontime: getCSS("--ontime")
+  sleep: css("--sleep"),
+  work: css("--work"),
+  ontime: css("--ontime")
 };
 
 /* ========= Helpers ========= */
 function $(id){ return document.getElementById(id) }
-function getCSS(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim() }
+function css(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim() }
 function lerp(a,b,t){ return a + (b - a) * t }
 function clamp(n,min,max){ return Math.max(min, Math.min(max, n)) }
 
@@ -176,11 +177,20 @@ let sleepMin = Math.round(parseFloat(sleepH.value)*60);
 let workMin  = Math.round(parseFloat(workH.value)*60);
 let onTime   = Math.max(0, TOTAL - sleepMin - workMin);
 let animTarget = { sleep: sleepMin, work: workMin, ontime: onTime };
-let current = { sleep: sleepMin, work: workMin, ontime: onTime };
+let current    = { sleep: sleepMin, work: workMin, ontime: onTime };
+let lockedWorkMin = workMin; // when lock is enabled
 
 /* ========= Drawing ========= */
 function draw(){
   ctx.clearRect(0,0,w,h);
+
+  // subtle glow
+  const grad = ctx.createRadialGradient(w/2,h*0.6,50,w/2,h*0.6,h*0.7);
+  grad.addColorStop(0, "rgba(37,247,181,0.08)");
+  grad.addColorStop(1, "rgba(37,247,181,0)");
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.arc(w/2,h*0.65,h*0.6,0,Math.PI*2); ctx.fill();
+
   const r = Math.max(2, Math.min(cell*0.36, 8));
   tokens.forEach(t=>{
     if(t.alpha <= 0.02) return;
@@ -195,7 +205,9 @@ function draw(){
 
 /* ========= Allocation ========= */
 function applyAllocation(){
-  let sNeeded = sleepMin, wNeeded = workMin;
+  const sNeeded = sleepMin;
+  const wNeeded = workMin;
+
   tokens.forEach((t, i)=>{
     let desiredState, desiredColor;
     if(i < sNeeded) { desiredState="sleep"; desiredColor=COLORS.sleep; }
@@ -205,10 +217,11 @@ function applyAllocation(){
     if(t.state !== desiredState){
       t.state = desiredState;
       t.color = desiredColor;
-      t.alpha = 0.15; // pulse
+      t.alpha = 0.15; // pulse on change
     }
     t.alpha = lerp(t.alpha, 1, 0.1);
   });
+
   onTime = Math.max(0, TOTAL - sleepMin - workMin);
   animTarget.sleep = sleepMin;
   animTarget.work  = workMin;
@@ -233,27 +246,42 @@ function loop(){
 }
 loop();
 
-/* ========= Events ========= */
-function recalc(){
-  // if work is locked, restore previous minutes and keep the slider visually in sync
-  if(lockWork.checked){
-    workH.value = (workMin/60).toFixed(2);
-  } else {
-    workMin  = Math.round(parseFloat(workH.value)*60);
-  }
-  sleepMin = Math.round(parseFloat(sleepH.value)*60);
+/* ========= Recalc + Lock Behavior ========= */
+function recalc() {
+  // sleep always from slider
+  const sleepHours = parseFloat(sleepH.value) || 0;
+  sleepMin = Math.round(sleepHours * 60);
 
-  // Livelihood $/min = salary / (workH * 60 * 5 * 52)
-  const sal = clamp(parseFloat(salary.value)||0,0,5e6);
-  const workHours = lockWork.checked ? (workMin/60) : (parseFloat(workH.value)||0);
-  const workMinYear = (workHours||0)*60*5*52;
+  // work from slider unless locked
+  if (lockWork.checked) {
+    workMin = lockedWorkMin;
+  } else {
+    const workHours = parseFloat(workH.value) || 0;
+    workMin = Math.round(workHours * 60);
+    lockedWorkMin = workMin; // keep in sync
+  }
+
+  // Livelihood $/min = salary / (workHours * 60 * 5 * 52)
+  const sal = Math.max(0, parseFloat(salary.value) || 0);
+  const workHoursForCalc = lockWork.checked ? (workMin / 60) : (parseFloat(workH.value) || 0);
+  const workMinYear = workHoursForCalc * 60 * 5 * 52;
   const dpm = workMinYear ? sal / workMinYear : 0;
   dpmEl.textContent = "$" + dpm.toFixed(2);
 
   applyAllocation();
 }
 
-[sleepH,workH,salary,lockWork].forEach(el=> el.addEventListener("input", recalc));
+function syncLockUI(){
+  workH.disabled = lockWork.checked;
+  if (lockWork.checked) {
+    lockedWorkMin = workMin; // freeze at current value
+  }
+  recalc();
+}
+
+/* ========= Events ========= */
+[sleepH, workH, salary].forEach(el => el.addEventListener("input", recalc));
+lockWork.addEventListener("change", syncLockUI);
 
 openBtn.addEventListener("click", ()=>{
   door.classList.add("open");
@@ -261,7 +289,7 @@ openBtn.addEventListener("click", ()=>{
   openBtn.textContent = "Vault Opened";
 });
 
-recalc();
+syncLockUI(); // initial
 </script>
 </body>
 </html>
